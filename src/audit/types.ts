@@ -7,6 +7,7 @@
  *  - Recommandation : placez **toutes** vos données métier dans `details`.
  *  - Le HMAC signe aussi `details`, donc toute modification sera détectée.
  *  - Avec `exactOptionalPropertyTypes`, les champs `undefined` sont **omis** à l'écriture.
+ *  - Le champ `user` est toujours présent dans les événements persistés, et doit être `null` pour les actions système, jamais omis.
  *
  * EN 🇬🇧 — How to extend the contract?
  *  - The immutable nucleus (`timestamp`, `action`, `hmac`) is guaranteed by the library.
@@ -14,6 +15,7 @@
  *  - Best practice: keep custom data **inside `details`** only.
  *  - The HMAC also covers `details`, so any tampering is detected.
  *  - With `exactOptionalPropertyTypes`, `undefined` fields are **omitted** when serialized.
+ *  - The `user` field is always present in persisted events and must be `null` for system actions, never omitted.
  *
  * EXAMPLE / EXEMPLE
  *  -----------------
@@ -53,6 +55,12 @@ export interface AuditUser {
   name?: string;
 }
 
+export interface AuditContext {
+  // user peut être fourni, absent, ou explicitement null (system)
+  user?: AuditUser | null; // null = système, undefined = non fourni (sera aussi normalisé en null)
+  // ... autres champs de contexte
+}
+
 /**
  * Core fields that MUST exist and are covered by the HMAC.
  * These are the non-negotiable pillars for auditability.
@@ -81,13 +89,25 @@ export interface AuditEnvelope {
 }
 
 /**
+ * Canonical envelope used in persisted/logged events.
+ * In canonical form, `user` MUST always exist:
+ *  - human user → AuditUser
+ *  - system     → null
+ * Never omit the field (avoid undefined) to disambiguate "system" from "not provided".
+ */
+export interface AuditEnvelopeCanonical extends Omit<AuditEnvelope, "user"> {
+  /** Always present; null means "system" */
+  user: AuditUser | null;
+}
+
+/**
  * Full audit event with an extensible `details` bag.
  * Users can strongly type their `details` while the core remains intact.
  */
 export type AuditEvent<
   D extends Record<string, unknown> = Record<string, unknown>,
 > = BaseAuditEventCore &
-  AuditEnvelope & {
+  AuditEnvelopeCanonical & {
     /** Free-form, user-defined, but typed by the library consumer */
     details?: D;
   };
@@ -98,7 +118,14 @@ export type AuditEvent<
  */
 export type InputEvent<
   D extends Record<string, unknown> = Record<string, unknown>,
-> = Omit<AuditEvent<D>, "timestamp" | "hmac"> & {
+> = Omit<AuditEvent<D>, "timestamp" | "hmac" | "user"> & {
   /** Allow caller to override timestamp if needed */
   timestamp?: string;
+  /**
+   * Optional at input time:
+   *  - provide AuditUser to attribute the action to a human
+   *  - omit or set null to mark "system"
+   * The library canonicalizes to `user: null` when absent.
+   */
+  user?: AuditUser | null;
 };

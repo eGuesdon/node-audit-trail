@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 
-import { AuditClient } from "./client.js";
-import type { AuditEvent } from "./types.js";
-import { runWithContext } from "./context.js";
-import { Audit } from "./decorators.js";
+import { AuditClient } from "../../audit/client.js";
+import type { AuditEvent } from "../../audit/types.js";
+import { runWithContext } from "../../audit/context.js";
+import { Audit } from "../../audit/decorators.js";
 
 class MemSink {
   public events: AuditEvent[] = [];
