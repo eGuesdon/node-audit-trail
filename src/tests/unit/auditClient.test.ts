@@ -80,7 +80,7 @@ describe("AuditClient", () => {
     });
 
     // Le user doit être présent et exact
-    expect(e.user).toBe("alice");
+    expect(e.user).toBe({ id: "alice", name: "Alice Doe" });
 
     // Le HMAC doit correspondre au payload canonique
     const baseHuman = (ev: AuditEvent): Record<string, unknown> => {
