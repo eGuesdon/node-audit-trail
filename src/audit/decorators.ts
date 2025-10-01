@@ -1,4 +1,5 @@
 import type { AuditClient } from "./client.js";
+import { getContext, withChildSpan } from "./context.js";
 
 type Redactor<T = unknown> = (value: T) => T;
 
@@ -32,58 +33,72 @@ export function Audit<
     const entityName = opts.entity ?? "Unknown";
 
     return async function (this: This, ...args: A): Promise<R> {
-      const redactArgs = opts.redactArgs ?? ((x: A) => x);
-      const redactResult = opts.redactResult ?? ((x: R) => x);
-      const safeArgs = redactArgs(args);
+      return withChildSpan(String(context.name), async () => {
+        const ctx = getContext();
+        const trace = {
+          ...(ctx?.traceId ? { traceId: ctx.traceId } : {}),
+          ...(ctx?.spanId ? { spanId: ctx.spanId } : {}),
+          ...(ctx?.parentSpanId ? { parentSpanId: ctx.parentSpanId } : {}),
+        };
 
-      try {
-        const result = await originalMethod.apply(this, args);
-        const safeResult = redactResult(result as R);
+        const redactArgs = opts.redactArgs ?? ((x: A) => x);
+        const redactResult = opts.redactResult ?? ((x: R) => x);
+        const safeArgs = redactArgs(args);
 
-        if (!opts.on || opts.on === "always" || opts.on === "success") {
-          const extra = opts.details?.(args, result as R) ?? {};
-          await audit.log({
-            action: actionName,
-            entity: entityName,
-            outcome: "success",
-            details: {
-              method: String(context.name),
-              args: safeArgs as unknown,
-              result: safeResult as unknown,
-              ...extra,
-            },
-          });
-        }
-        return result as R;
-      } catch (err) {
-        if (!opts.on || opts.on === "always" || opts.on === "error") {
-          // ✅ Construit un objet compatible exactOptionalPropertyTypes
-          const errorObj: { name: string; message: string; stack?: string } =
-            err instanceof Error
-              ? {
-                  name: err.name ?? "Error",
-                  message: err.message ?? String(err),
-                  ...(err.stack ? { stack: err.stack } : {}),
-                }
-              : { name: "Error", message: String(err) };
+        try {
+          const result = await originalMethod.apply(this, args);
+          const safeResult = redactResult(result as R);
 
-          const extra = opts.details?.(args) ?? {};
-          await audit
-            .log({
+          if (!opts.on || opts.on === "always" || opts.on === "success") {
+            const extra = opts.details?.(args, result as R) ?? {};
+            await audit.log({
               action: actionName,
               entity: entityName,
-              outcome: "error",
-              error: errorObj,
+              ...(ctx?.user ? { user: ctx.user } : {}),
+              ...(ctx?.traceId ? { requestId: ctx.traceId } : {}),
+              outcome: "success",
               details: {
                 method: String(context.name),
                 args: safeArgs as unknown,
+                result: safeResult as unknown,
+                trace,
                 ...extra,
               },
-            })
-            .catch(() => {});
+            });
+          }
+          return result as R;
+        } catch (err) {
+          if (!opts.on || opts.on === "always" || opts.on === "error") {
+            const errorObj: { name: string; message: string; stack?: string } =
+              err instanceof Error
+                ? {
+                    name: err.name ?? "Error",
+                    message: err.message ?? String(err),
+                    ...(err.stack ? { stack: err.stack } : {}),
+                  }
+                : { name: "Error", message: String(err) };
+
+            const extra = opts.details?.(args) ?? {};
+            await audit
+              .log({
+                action: actionName,
+                entity: entityName,
+                ...(ctx?.user ? { user: ctx.user } : {}),
+                ...(ctx?.traceId ? { requestId: ctx.traceId } : {}),
+                outcome: "error",
+                error: errorObj,
+                details: {
+                  method: String(context.name),
+                  args: safeArgs as unknown,
+                  trace,
+                  ...extra,
+                },
+              })
+              .catch(() => {});
+          }
+          throw err;
         }
-        throw err;
-      }
+      });
     };
   };
 }
