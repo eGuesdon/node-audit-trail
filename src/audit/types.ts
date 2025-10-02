@@ -129,3 +129,9 @@ export type InputEvent<
    */
   user?: AuditUser | null;
 };
+
+export interface AuditSink {
+  write(line: string): Promise<void>;
+  drain(): Promise<void>; // attendre que la queue soit vide
+  close(): Promise<void>; // flush + fermeture stream
+}

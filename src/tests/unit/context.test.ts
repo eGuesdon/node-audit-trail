@@ -5,11 +5,13 @@ import type { AuditEvent } from "../../audit/types.js";
 import { runWithContext } from "../../audit/context.js";
 import { Audit } from "../../audit/decorators.js";
 
-class MemSink {
+class MemSink /* implements AuditSink */ {
   public events: AuditEvent[] = [];
-  async write(e: AuditEvent) {
-    this.events.push(e);
+  async write(line: string): Promise<void> {
+    this.events.push(JSON.parse(line) as AuditEvent);
   }
+  async drain(): Promise<void> {}
+  async close(): Promise<void> {}
 }
 
 type Trace = { traceId?: string; spanId?: string; parentSpanId?: string };

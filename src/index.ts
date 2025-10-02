@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
 import { AuditClient } from "./audit/client.js";
-import { FileJsonlSink } from "./audit/fileSink.js";
+import { FileJsonlSink } from "./audit/sinks/fileSink.js";
 import { Audit } from "./audit/decorators.js";
 import { runWithContext } from "./audit/context.js";
 
